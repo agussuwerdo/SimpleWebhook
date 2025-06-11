@@ -1,7 +1,7 @@
 const { createClient } = require('redis');
 
 async function testRedisConnection() {
-  const redisUrl = process.env.NEXT_PUBLIC_REDIS_URL;
+  const redisUrl = process.env.NEXT_PUBLIC_REDIS_URL || process.env.REDIS_URL;
   
   console.log('Testing Redis connection...');
   console.log('Redis URL:', redisUrl.replace(/:[^:@]*@/, ':****@')); // Hide password in logs

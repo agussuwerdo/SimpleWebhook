@@ -7,7 +7,7 @@ const MAX_CONNECTION_ATTEMPTS = 3;
 export async function getRedisClient() {
   if (!redis) {
     redis = createClient({ 
-      url: process.env.NEXT_PUBLIC_REDIS_URL || '',
+      url: process.env.NEXT_PUBLIC_REDIS_URL || process.env.REDIS_URL || '',
       socket: {
         connectTimeout: 10000, // 10 seconds connection timeout
         keepAlive: 30000,      // 30 seconds keepalive
