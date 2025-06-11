@@ -1,5 +1,5 @@
-import { WebhookData, storeWebhookData as storeInRedis, getAllWebhooks as getFromRedis } from './redis';
-import { storeFallbackWebhook, getFallbackWebhooks } from './fallback-storage';
+import { WebhookData, storeWebhookData as storeInRedis, getAllWebhooks as getFromRedis, deleteWebhookData as deleteFromRedis } from './redis';
+import { storeFallbackWebhook, getFallbackWebhooks, deleteFallbackWebhooks } from './fallback-storage';
 
 export interface StorageResult {
   success: boolean;
@@ -44,4 +44,18 @@ export async function getWebhooks(limit: number = 50): Promise<StorageResult> {
     data: memoryData,
     storage: 'memory'
   };
+}
+
+export async function deleteWebhooks(ids: string[]): Promise<{ success: boolean; storage: 'redis' | 'memory'; error?: string }> {
+  // Always delete from fallback storage
+  deleteFallbackWebhooks(ids);
+  
+  // Try Redis deletion
+  try {
+    await deleteFromRedis(ids);
+    return { success: true, storage: 'redis' };
+  } catch (error) {
+    console.warn('Redis deletion failed, deleted from memory storage only:', error instanceof Error ? error.message : 'Unknown error');
+    return { success: true, storage: 'memory' };
+  }
 } 

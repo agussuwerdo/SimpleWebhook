@@ -1,28 +1,60 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getWebhooks } from '../../lib/storage';
+import { getWebhooks, deleteWebhooks } from '../../lib/storage';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
+  if (req.method === 'GET') {
+    try {
+      const { data, storage } = await getWebhooks();
+      res.status(200).json({
+        success: true,
+        data,
+        storage
+      });
+    } catch (error) {
+      console.error('Error in webhooks API:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch webhooks',
+        data: []
+      });
+    }
+  } else if (req.method === 'DELETE') {
+    try {
+      const { ids } = req.body;
+      
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid webhook IDs provided'
+        });
+      }
 
-  try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const result = await getWebhooks(limit);
-    
-    res.status(200).json({
-      success: result.success,
-      data: result.data,
-      count: result.data.length,
-      storage: result.storage,
-      usingFallback: result.storage === 'memory',
-    });
-  } catch (error) {
-    console.error('Error fetching webhooks:', error);
-    res.status(500).json({
+      const { success, storage } = await deleteWebhooks(ids);
+      
+      if (success) {
+        res.status(200).json({
+          success: true,
+          message: `Successfully deleted ${ids.length} webhook(s)`,
+          storage
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to delete webhooks'
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting webhooks:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete webhooks'
+      });
+    }
+  } else {
+    res.setHeader('Allow', ['GET', 'DELETE']);
+    res.status(405).json({
       success: false,
-      message: 'Internal server error',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      message: `Method ${req.method} not allowed`
     });
   }
 } 

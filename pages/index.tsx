@@ -9,6 +9,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState<string>('');
   const [storageType, setStorageType] = useState<string>('redis');
+  const [selectedWebhooks, setSelectedWebhooks] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
     const fetchWebhooks = async () => {
         try {
@@ -20,6 +22,8 @@ export default function Home() {
         setWebhooks(data.data);
         setStorageType(data.storage || 'redis');
         setError(null);
+        // Clear selection if webhooks changed
+        setSelectedWebhooks(new Set());
       } else {
         setError(data.message || 'Failed to fetch webhooks');
       }
@@ -52,6 +56,64 @@ export default function Home() {
     if (webhookUrl) {
       navigator.clipboard.writeText(webhookUrl);
       alert('Webhook URL copied to clipboard!');
+    }
+  };
+
+  const handleWebhookSelect = (id: string, selected: boolean) => {
+    const newSelected = new Set(selectedWebhooks);
+    if (selected) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedWebhooks(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedWebhooks.size === webhooks.length) {
+      // Deselect all
+      setSelectedWebhooks(new Set());
+    } else {
+      // Select all
+      setSelectedWebhooks(new Set(webhooks.map(w => w.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedWebhooks.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedWebhooks.size} selected webhook(s)? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      const response = await fetch('/api/webhooks', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedWebhooks)
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Refresh the list
+        await fetchWebhooks();
+        setSelectedWebhooks(new Set());
+      } else {
+        setError(data.message || 'Failed to delete webhooks');
+      }
+    } catch (err) {
+      setError('Failed to delete webhooks');
+      console.error('Error deleting webhooks:', err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -126,6 +188,34 @@ export default function Home() {
                 </span>
               </div>
                         </div>
+
+                        {/* Selection Controls */}
+                        {webhooks.length > 0 && (
+                          <div className="mt-4 flex items-center justify-between bg-white rounded-lg border border-gray-200 p-4">
+                            <div className="flex items-center space-x-4">
+                              <button
+                                onClick={handleSelectAll}
+                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                {selectedWebhooks.size === webhooks.length ? 'Deselect All' : 'Select All'}
+                              </button>
+                              {selectedWebhooks.size > 0 && (
+                                <span className="text-sm text-gray-600">
+                                  {selectedWebhooks.size} selected
+                                </span>
+                              )}
+                            </div>
+                            {selectedWebhooks.size > 0 && (
+                              <button
+                                onClick={handleDeleteSelected}
+                                disabled={deleting}
+                                className="px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {deleting ? 'Deleting...' : `Delete Selected (${selectedWebhooks.size})`}
+                              </button>
+                            )}
+                          </div>
+                        )}
                     </div>
 
                     {/* Loading State */}
@@ -168,7 +258,7 @@ export default function Home() {
                                 <p className="text-sm text-gray-700 mb-2">Try this example:</p>
                                                  <code className="block bg-white p-3 rounded text-sm text-gray-800 break-all">
                     curl -X POST {webhookUrl || 'YOUR_DOMAIN/api/webhook'} {'\\'}<br />
-                    &nbsp;&nbsp;-H "Content-Type: application/json" {'\\'}<br />
+                    &nbsp;&nbsp;-H &quot;Content-Type: application/json&quot; {'\\'}<br />
                     &nbsp;&nbsp;-d {`'{"message": "Hello, webhook!"}'`}
                  </code>
                             </div>
@@ -179,7 +269,12 @@ export default function Home() {
                     {webhooks.length > 0 && (
                         <div className="space-y-4">
                             {webhooks.map((webhook) => (
-                                <WebhookCard key={webhook.id} webhook={webhook} />
+                                <WebhookCard 
+                                  key={webhook.id} 
+                                  webhook={webhook}
+                                  isSelected={selectedWebhooks.has(webhook.id)}
+                                  onSelect={handleWebhookSelect}
+                                />
                             ))}
                         </div>
                     )}

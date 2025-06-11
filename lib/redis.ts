@@ -209,4 +209,31 @@ export async function closeRedisConnection() {
       console.warn('Error closing Redis connection:', error);
     }
   }
+}
+
+// Delete webhook data
+export async function deleteWebhookData(ids: string[]): Promise<void> {
+  try {
+    const client = await getRedisClient();
+    
+    // Delete webhook data and remove from timeline using pipeline with timeout
+    await executeWithTimeout(async () => {
+      const pipeline = client.multi();
+      
+      // Delete individual webhook records
+      for (const id of ids) {
+        pipeline.del(`webhook:${id}`);
+      }
+      
+      // Remove from timeline sorted set
+      for (const id of ids) {
+        pipeline.zRem('webhooks:timeline', id);
+      }
+      
+      return await pipeline.exec();
+    });
+  } catch (error) {
+    console.error('Error deleting webhook data:', error);
+    throw error;
+  }
 } 
