@@ -5,9 +5,10 @@ interface WebhookCardProps {
     isSelected?: boolean;
     onSelect?: (id: string, selected: boolean) => void;
     isNew?: boolean;
+    onToast?: (message: string) => void;
 }
 
-export default function WebhookCard({ webhook, isSelected = false, onSelect, isNew = false }: WebhookCardProps) {
+export default function WebhookCard({ webhook, isSelected = false, onSelect, isNew = false, onToast }: WebhookCardProps) {
     const formatTimestamp = (timestamp: string) => {
         return new Date(timestamp).toLocaleString();
     };
@@ -45,10 +46,14 @@ export default function WebhookCard({ webhook, isSelected = false, onSelect, isN
 
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text).then(() => {
-            // You could add a toast notification here
-            console.log(`${label} copied to clipboard`);
+            if (onToast) {
+                onToast(`${label} copied to clipboard!`);
+            }
         }).catch(err => {
             console.error('Failed to copy to clipboard:', err);
+            if (onToast) {
+                onToast('Failed to copy to clipboard');
+            }
         });
     };
 
@@ -74,93 +79,151 @@ export default function WebhookCard({ webhook, isSelected = false, onSelect, isN
     };
 
     return (
-        <div className={`bg-white rounded-lg shadow-md border p-6 mb-4 transition-all ${
-            isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-        } ${isNew ? 'animate-pulse border-green-400 bg-green-50' : ''}`}>
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                    {onSelect && (
-                        <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={handleCheckboxChange}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                    )}
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getMethodColor(webhook.method)}`}>
-                        {webhook.method}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                        {formatTimestamp(webhook.timestamp)}
-                    </span>
-                </div>
-                <span className="text-xs text-gray-400 font-mono">
-                    ID: {webhook.id.slice(0, 8)}...
-                </span>
-            </div>
-
-            <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-700">Request URL</h3>
-                    <button
-                        onClick={copyUrl}
-                        className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                        title="Copy URL"
-                    >
-                        Copy
-                    </button>
-                </div>
-                <code className="bg-gray-100 px-3 py-2 rounded text-sm text-gray-800 block break-all">
-                    {webhook.url}
-                </code>
-            </div>
-
-            <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-700">Headers</h3>
-                    <button
-                        onClick={copyHeaders}
-                        className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                        title="Copy Headers"
-                    >
-                        Copy
-                    </button>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3 max-h-40 overflow-y-auto">
-                    {formatHeaders(webhook.headers).length > 0 ? (
-                        <div className="space-y-1">
-                            {formatHeaders(webhook.headers).map(([key, value]) => (
-                                <div key={key} className="flex text-xs">
-                                    <span className="font-medium text-gray-600 w-32 flex-shrink-0">
-                                        {key}:
-                                    </span>
-                                    <span className="text-gray-800 break-all ml-2">
-                                        {value}
-                                    </span>
-                                </div>
-                            ))}
+        <div className={`bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border transition-all duration-300 hover:shadow-xl ${
+            isSelected ? 'border-blue-300 bg-blue-50/80 ring-2 ring-blue-200' : 'border-white/30'
+        } ${isNew ? 'ring-2 ring-green-300 bg-green-50/80 animate-pulse' : ''}`}>
+            {/* Header */}
+            <div className="p-6 border-b border-gray-100/50">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                        {onSelect && (
+                            <div className="relative">
+                                <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={handleCheckboxChange}
+                                    className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-md transition-colors"
+                                />
+                            </div>
+                        )}
+                        <div className="flex items-center space-x-3">
+                            <span className={`px-3 py-1.5 rounded-lg text-sm font-semibold border-2 ${getMethodColor(webhook.method)}`}>
+                                {webhook.method}
+                            </span>
+                            {isNew && (
+                                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full border border-green-200 animate-pulse">
+                                    New
+                                </span>
+                            )}
                         </div>
-                    ) : (
-                        <span className="text-gray-500 text-sm">No headers</span>
-                    )}
+                    </div>
+                    <div className="flex items-center space-x-3">
+                        <div className="text-right">
+                            <div className="text-sm font-medium text-gray-700">
+                                {formatTimestamp(webhook.timestamp)}
+                            </div>
+                            <div className="text-xs text-gray-400 font-mono">
+                                {webhook.id.slice(0, 8)}...
+                            </div>
+                        </div>
+                        <div className="w-8 h-8 bg-gradient-to-r from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div>
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-700">Body/Payload</h3>
-                    <button
-                        onClick={copyBody}
-                        className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-                        title="Copy Body"
-                    >
-                        Copy
-                    </button>
+            {/* Content */}
+            <div className="p-6 space-y-6">
+                {/* URL Section */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            <h3 className="text-sm font-semibold text-gray-800">Request URL</h3>
+                        </div>
+                        <button
+                            onClick={copyUrl}
+                            className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors border border-blue-200 hover:border-blue-300"
+                            title="Copy URL"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-4 border border-gray-200">
+                        <code className="text-sm text-gray-800 font-mono break-all">
+                            {webhook.url}
+                        </code>
+                    </div>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto">
-                    <pre className="text-xs text-gray-800 whitespace-pre-wrap break-words">
-                        {formatBody(webhook.body)}
-                    </pre>
+
+                {/* Headers Section */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <h3 className="text-sm font-semibold text-gray-800">Headers</h3>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                {formatHeaders(webhook.headers).length}
+                            </span>
+                        </div>
+                        <button
+                            onClick={copyHeaders}
+                            className="flex items-center space-x-1 text-xs text-purple-600 hover:text-purple-800 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors border border-purple-200 hover:border-purple-300"
+                            title="Copy Headers"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100 max-h-48 overflow-y-auto">
+                        {formatHeaders(webhook.headers).length > 0 ? (
+                            <div className="space-y-2">
+                                {formatHeaders(webhook.headers).map(([key, value]) => (
+                                    <div key={key} className="flex items-start text-sm">
+                                        <span className="font-semibold text-purple-700 min-w-0 flex-shrink-0 w-32">
+                                            {key}:
+                                        </span>
+                                        <span className="text-gray-700 break-all ml-3 font-mono">
+                                            {value}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-center py-4">
+                                <span className="text-gray-500 text-sm italic">No headers present</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Body Section */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                            <h3 className="text-sm font-semibold text-gray-800">Payload</h3>
+                        </div>
+                        <button
+                            onClick={copyBody}
+                            className="flex items-center space-x-1 text-xs text-green-600 hover:text-green-800 px-3 py-1.5 rounded-lg hover:bg-green-50 transition-colors border border-green-200 hover:border-green-300"
+                            title="Copy Body"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100 max-h-64 overflow-y-auto">
+                        <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-mono leading-relaxed">
+                            {formatBody(webhook.body)}
+                        </pre>
+                    </div>
                 </div>
             </div>
         </div>
