@@ -11,6 +11,8 @@ export default function Home() {
   const [storageType, setStorageType] = useState<string>('redis');
   const [selectedWebhooks, setSelectedWebhooks] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [newWebhookIds, setNewWebhookIds] = useState<Set<string>>(new Set());
 
     const fetchWebhooks = async () => {
         try {
@@ -35,17 +37,118 @@ export default function Home() {
         }
     };
 
-      useEffect(() => {
+  useEffect(() => {
     // Set webhook URL on client side
     if (typeof window !== 'undefined') {
       setWebhookUrl(`${window.location.origin}/api/webhook`);
     }
     
+    // Initial fetch
     fetchWebhooks();
     
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchWebhooks, 30000);
-    return () => clearInterval(interval);
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let isComponentMounted = true;
+    
+    const setupSSE = () => {
+      if (!isComponentMounted) return;
+      
+      console.log('Setting up SSE connection...');
+      eventSource = new EventSource('/api/webhook-stream');
+      
+      eventSource.onopen = () => {
+        if (!isComponentMounted) return;
+        console.log('SSE connection opened');
+        setSseConnected(true);
+        setError(null);
+      };
+      
+      eventSource.onmessage = (event) => {
+        if (!isComponentMounted) return;
+        
+        try {
+          console.log('SSE message received:', event.data);
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'connected') {
+            console.log('SSE connected:', data.message);
+          } else if (data.type === 'heartbeat') {
+            // Heartbeat received, connection is alive
+            console.log('SSE heartbeat received');
+          } else if (data.type === 'webhook') {
+            console.log('New webhook received via SSE:', data.data.id);
+            // Add new webhook to the beginning of the list
+            setWebhooks(prev => {
+              console.log('Adding webhook to list, current count:', prev.length);
+              return [data.data, ...prev];
+            });
+            // Mark as new for animation
+            setNewWebhookIds(prev => new Set(Array.from(prev).concat(data.data.id)));
+            // Remove the "new" status after 3 seconds
+            setTimeout(() => {
+              if (!isComponentMounted) return;
+              setNewWebhookIds(prev => {
+                const updated = new Set(prev);
+                updated.delete(data.data.id);
+                return updated;
+              });
+            }, 3000);
+          } else if (data.type === 'webhook-deleted') {
+            console.log('Webhook deletion received via SSE:', data.data.ids);
+            // Remove deleted webhooks from the list
+            setWebhooks(prev => prev.filter(webhook => !data.data.ids.includes(webhook.id)));
+            // Clear selections for deleted items
+            setSelectedWebhooks(prev => {
+              const newSelected = new Set(prev);
+              data.data.ids.forEach((id: string) => newSelected.delete(id));
+              return newSelected;
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing SSE message:', error);
+        }
+      };
+      
+      eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        if (!isComponentMounted) return;
+        
+        setSseConnected(false);
+        
+        // Close the failed connection
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        
+        // Try to reconnect after a delay
+        reconnectTimeout = setTimeout(() => {
+          if (isComponentMounted) {
+            console.log('Attempting to reconnect SSE...');
+            setupSSE();
+          }
+        }, 3000);
+      };
+    };
+    
+    // Initial SSE setup
+    setupSSE();
+    
+    return () => {
+      console.log('Cleaning up SSE connection...');
+      isComponentMounted = false;
+      setSseConnected(false);
+      
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+    };
   }, []);
 
     const handleRefresh = () => {
@@ -103,8 +206,8 @@ export default function Home() {
       const data = await response.json();
 
       if (data.success) {
-        // Refresh the list
-        await fetchWebhooks();
+        // No need to refresh - SSE will handle the update
+        // Just clear the selection as SSE will remove the webhooks
         setSelectedWebhooks(new Set());
       } else {
         setError(data.message || 'Failed to delete webhooks');
@@ -176,8 +279,15 @@ export default function Home() {
                 Recent Webhooks ({webhooks.length})
               </h2>
               <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-500">
-                  Auto-refreshes every 30 seconds
+                <span className={`text-sm flex items-center space-x-2 ${
+                  sseConnected ? 'text-green-600' : 'text-orange-600'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    sseConnected ? 'bg-green-500' : 'bg-orange-500'
+                  }`}></span>
+                  <span>
+                    {sseConnected ? 'Real-time connected' : 'Connecting...'}
+                  </span>
                 </span>
                 <span className={`text-xs px-2 py-1 rounded-full ${
                   storageType === 'redis' 
@@ -274,6 +384,7 @@ export default function Home() {
                                   webhook={webhook}
                                   isSelected={selectedWebhooks.has(webhook.id)}
                                   onSelect={handleWebhookSelect}
+                                  isNew={newWebhookIds.has(webhook.id)}
                                 />
                             ))}
                         </div>

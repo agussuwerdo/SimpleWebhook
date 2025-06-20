@@ -4,9 +4,10 @@ interface WebhookCardProps {
     webhook: WebhookData;
     isSelected?: boolean;
     onSelect?: (id: string, selected: boolean) => void;
+    isNew?: boolean;
 }
 
-export default function WebhookCard({ webhook, isSelected = false, onSelect }: WebhookCardProps) {
+export default function WebhookCard({ webhook, isSelected = false, onSelect, isNew = false }: WebhookCardProps) {
     const formatTimestamp = (timestamp: string) => {
         return new Date(timestamp).toLocaleString();
     };
@@ -75,7 +76,7 @@ export default function WebhookCard({ webhook, isSelected = false, onSelect }: W
     return (
         <div className={`bg-white rounded-lg shadow-md border p-6 mb-4 transition-all ${
             isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-        }`}>
+        } ${isNew ? 'animate-pulse border-green-400 bg-green-50' : ''}`}>
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
                     {onSelect && (

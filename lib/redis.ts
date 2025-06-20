@@ -109,7 +109,7 @@ export async function storeWebhookData(data: WebhookData) {
     const key = `webhook:${data.id}`;
     
     // Use pipeline for better performance with timeout
-    await executeWithTimeout(async () => {
+    const results = await executeWithTimeout(async () => {
       const pipeline = client.multi();
       pipeline.setEx(key, 86400 * 7, JSON.stringify(data)); // Store for 7 days
       pipeline.zAdd('webhooks:timeline', {
@@ -119,6 +119,11 @@ export async function storeWebhookData(data: WebhookData) {
       
       return await pipeline.exec();
     });
+    
+    // If we got results back without throwing an error, the pipeline was successful
+    if (!results) {
+      throw new Error('Redis pipeline returned no results');
+    }
   } catch (error) {
     console.error('Error storing webhook data:', error);
     throw error;
@@ -166,13 +171,26 @@ export async function getAllWebhooks(limit: number = 50): Promise<WebhookData[]>
     const webhooks: WebhookData[] = [];
     
     if (results) {
-      for (const result of results) {
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
         if (result && result.length > 1 && result[1]) {
           try {
             const data = JSON.parse(result[1] as string);
             webhooks.push(data);
           } catch (parseError) {
             console.warn('Error parsing webhook data:', parseError);
+            // Clean up corrupted data
+            const corruptedId = webhookIds[i];
+            if (corruptedId) {
+              console.warn(`Removing corrupted webhook data: ${corruptedId}`);
+              try {
+                const client = await getRedisClient();
+                await client.del(`webhook:${corruptedId}`);
+                await client.zRem('webhooks:timeline', corruptedId);
+              } catch (cleanupError) {
+                console.warn('Error cleaning up corrupted data:', cleanupError);
+              }
+            }
           }
         }
       }
@@ -188,13 +206,17 @@ export async function getAllWebhooks(limit: number = 50): Promise<WebhookData[]>
 // Health check function
 export async function checkRedisHealth(): Promise<boolean> {
   try {
-    const client = await getRedisClient();
+    // Don't create a new connection if we don't have one, just check if the existing one is ready
+    if (!redis || !redis.isReady) {
+      return false;
+    }
+    
     await executeWithTimeout(async () => {
-      return await client.ping();
-    }, 3000); // 3 second timeout for health check
+      return await redis.ping();
+    }, 2000); // 2 second timeout for health check
     return true;
   } catch (error) {
-    console.warn('Redis health check failed:', error);
+    // Don't log every health check failure to reduce noise
     return false;
   }
 }

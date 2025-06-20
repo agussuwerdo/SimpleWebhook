@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getWebhooks, deleteWebhooks } from '../../lib/storage';
+import { broadcastWebhookDeletion } from './webhook-stream';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -32,6 +33,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { success, storage } = await deleteWebhooks(ids);
       
       if (success) {
+        // Broadcast deletion to SSE clients
+        broadcastWebhookDeletion(ids);
+        
         res.status(200).json({
           success: true,
           message: `Successfully deleted ${ids.length} webhook(s)`,

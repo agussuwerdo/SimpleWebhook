@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { v4 as uuidv4 } from 'uuid';
 import { WebhookData } from '../../lib/redis';
 import { storeWebhook } from '../../lib/storage';
+import { broadcastWebhook } from './webhook-stream';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -17,6 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Store webhook data using unified storage
     const storageResult = await storeWebhook(webhookData);
+
+    // Broadcast to SSE clients
+    broadcastWebhook(webhookData);
 
     // Return success response
     res.status(200).json({
